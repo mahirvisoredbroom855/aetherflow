@@ -1,0 +1,73 @@
+version: "3.8"
+
+name: aetherflow
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: aetherflow-postgres
+    environment:
+      POSTGRES_DB: aetherflow_dev
+      POSTGRES_USER: aetherflow_user
+      POSTGRES_PASSWORD: dev_password_change_in_prod
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - aetherflow-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aetherflow_user -d aetherflow_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # Redis is optional for MVP - used for session storage or API response caching
+  redis:
+    image: redis:7-alpine
+    container_name: aetherflow-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - aetherflow-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped
+
+  localstack:
+    image: localstack/localstack:latest
+    container_name: aetherflow-localstack
+    environment:
+      SERVICES: s3,sqs
+      DEFAULT_REGION: us-east-1
+      EDGE_PORT: 4566
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+    ports:
+      - "4566:4566"
+    volumes:
+      - localstack_data:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - aetherflow-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:4566/_localstack/health | grep -q '\"s3\": \"running\"'"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+networks:
+  aetherflow-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  localstack_data:

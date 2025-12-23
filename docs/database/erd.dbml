@@ -1,0 +1,84 @@
+Project AetherFlow {
+  database_type: "PostgreSQL"
+  Note: "Department-aware schema for AetherFlow (Sales, Supply, Finance)."
+}
+
+Table users {
+  id int [pk, increment]
+  email varchar(255) [not null, unique, note: "Login identity; indexed"]
+  password_hash text [not null]
+  role varchar(20) [not null, note: "sales | supply | finance | admin"]
+  department varchar(50) [not null, note: "sales | supply | finance (admin may manage all)"]
+  is_active boolean [not null, default: true]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  Indexes {
+    (email) [unique, name: "users_email_uq"]
+  }
+}
+
+Table datasets {
+  id int [pk, increment]
+  department varchar(50) [not null, note: "Department tenant scope"]
+  name varchar(255) [not null]
+  description text
+  uploader_id int [not null]
+  file_type varchar(20) [not null, note: "csv | json"]
+  s3_bucket varchar(100) [not null]
+  s3_key varchar(500) [not null]
+  file_size_bytes bigint [not null]
+  row_count int
+  status varchar(20) [not null, default: "uploaded", note: "uploaded | processing | completed | failed"]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  Indexes {
+    (department, created_at) [name: "datasets_department_created_at_idx"]
+    (uploader_id) [name: "datasets_uploader_id_idx"]
+    (status) [name: "datasets_status_idx"]
+  }
+}
+
+Table jobs {
+  id int [pk, increment]
+  dataset_id int [not null]
+  job_type varchar(30) [not null, note: "etl | ml_inference"]
+  status varchar(20) [not null, default: "queued", note: "queued | processing | succeeded | failed"]
+  queue_message_id varchar(255)
+  attempts int [not null, default: 0]
+  max_attempts int [not null, default: 3]
+  error_message text
+  error_traceback text
+  started_at timestamptz
+  completed_at timestamptz
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  Indexes {
+    (dataset_id, job_type) [name: "jobs_dataset_id_job_type_idx"]
+    (status, created_at) [name: "jobs_status_created_at_idx"]
+    (queue_message_id) [name: "jobs_queue_message_id_idx"]
+  }
+}
+
+Table results {
+  id int [pk, increment]
+  dataset_id int [not null]
+  department varchar(50) [not null, note: "Denormalized for fast dashboards"]
+  result_type varchar(100) [not null, note: "etl_summary | sales_forecast | inventory_risk | finance_anomalies"]
+  payload jsonb [not null]
+  metadata jsonb
+  created_at timestamptz [not null]
+
+  Indexes {
+    (dataset_id, result_type) [name: "results_dataset_id_result_type_idx"]
+    (department, created_at) [name: "results_department_created_at_idx"]
+  }
+}
+
+Ref: datasets.uploader_id > users.id [delete: restrict]
+Ref: jobs.dataset_id > datasets.id [delete: cascade]
+Ref: results.dataset_id > datasets.id [delete: cascade]
+
+Note: "Key Relationships: users(1)->datasets(N), datasets(1)->jobs(N), datasets(1)->results(N)."

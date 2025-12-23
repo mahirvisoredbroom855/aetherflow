@@ -1,0 +1,8 @@
+# Local env files
+.env
+*.env
+
+# Local volumes/data (if you ever bind-mount)
+postgres_data/
+redis_data/
+localstack_data/
